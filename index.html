@@ -62,6 +62,7 @@
                 <h1>Колесо Фортуны</h1>
                 <div class="participant-input">
                     <div id="participants-list" class="mb-3"></div>
+                    <button id="share-btn" class="btn btn-success">Поделиться</button>
                 </div>
                 <div class="wheel-container">
                     <canvas id="wheel" width="600" height="600"></canvas>
@@ -76,10 +77,6 @@
         </div>
     </div>
 
-    <!-- Аудио для звуковых эффектов -->
-    <audio id="spin-sound" src="spin.mp3"></audio>
-    <audio id="win-sound" src="win.mp3"></audio>
-
     <!-- Telegram Web App API -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
@@ -91,12 +88,10 @@
         const wheel = document.getElementById('wheel');
         const spinBtn = document.getElementById('spin-btn');
         const resetBtn = document.getElementById('reset-btn');
+        const shareBtn = document.getElementById('share-btn');
         const participantsList = document.getElementById('participants-list');
         const resultDiv = document.getElementById('result');
         const ctx = wheel.getContext('2d');
-
-        const spinSound = document.getElementById('spin-sound');
-        const winSound = document.getElementById('win-sound');
 
         let segments = [];
         let colors = [];
@@ -116,20 +111,22 @@
             return params;
         }
 
+        // Добавление участника из URL
         const queryParams = getQueryParams();
-        if (queryParams.participants) {
-            segments = queryParams.participants.split(',');
-            colors = generateColors(segments.length);
-            drawWheel();
-            updateParticipantsList();
-            if (isAdmin()) {
-                spinBtn.disabled = false;
-            } else {
-                spinBtn.disabled = true;
-                spinBtn.textContent = "Только для администратора";
+        if (queryParams.participant) {
+            const newParticipant = queryParams.participant;
+            if (!segments.includes(newParticipant)) {
+                segments.push(newParticipant);
+                colors = generateColors(segments.length);
+                drawWheel();
+                updateParticipantsList();
+                if (isAdmin()) {
+                    spinBtn.disabled = false;
+                }
             }
         }
 
+        // Генерация цветов для колеса
         function generateColors(count) {
             const colorList = [];
             for (let i = 0; i < count; i++) {
@@ -139,6 +136,7 @@
             return colorList;
         }
 
+        // Отрисовка колеса
         function drawWheel() {
             ctx.clearRect(0, 0, wheel.width, wheel.height);
             const arc = (2 * Math.PI) / segments.length;
@@ -163,37 +161,27 @@
             });
         }
 
+        // Обновление списка участников
         function updateParticipantsList() {
             participantsList.innerHTML = segments.map(name => `
                 <div class="badge bg-primary me-2">${name}</div>
             `).join('');
         }
 
-        async function sendResultToTelegram(winner) {
-            const token = 'ВАШ_ТОКЕН_БОТА';
-            const chatId = 'ID_ЧАТА'; // Замените на ID чата
-            const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        chat_id: chatId,
-                        text: `Победитель: ${winner}`,
-                    }),
-                });
-                const data = await response.json();
-                console.log('Результат отправлен:', data);
-            } catch (error) {
-                console.error('Ошибка отправки:', error);
+        // Кнопка "Поделиться"
+        shareBtn.addEventListener('click', () => {
+            const user = tg.initDataUnsafe.user;
+            if (user) {
+                const username = user.username || `user${user.id}`;
+                const shareUrl = `${window.location.origin}${window.location.pathname}?participant=${username}`;
+                tg.showAlert(`Поделитесь этой ссылкой: ${shareUrl}`);
+            } else {
+                tg.showAlert("Ошибка: не удалось получить данные пользователя.");
             }
-        }
+        });
 
+        // Вращение колеса
         function spinWheel() {
-            spinSound.play(); // Звук вращения
             const randomDegree = Math.floor(Math.random() * 360) + 360 * 5;
             wheel.style.transform = `rotate(${randomDegree}deg)`;
 
@@ -204,8 +192,6 @@
                 const selectedIndex = Math.floor((rotation + 360) % 360 / degrees);
                 const winner = segments[selectedIndex];
                 resultDiv.textContent = `Победитель ${winner}!`;
-                winSound.play(); // Звук победы
-                sendResultToTelegram(winner); // Отправка результата в Telegram
             }, 5000);
         }
 
